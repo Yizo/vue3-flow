@@ -4,11 +4,16 @@ const isEmpty = data => data === null || data === undefined || data === ''
 const isEmptyArray = data => Array.isArray(data) ? data.length === 0 : true
 
 export class FormatUtils {
+
+    static param = []
+
     /**
      * 对基础设置,高级设置等设置页内容进行格式化
      * @param params
      */
     static formatSettings(param) {
+        this.param = param
+        console.time('格式化用时')
         const formart = (data) => JSON.parse(JSON.stringify(data))
         let treeList = this.flattenMapTreeToList(formart(param)).reverse()
         console.log('格式化第一步', treeList)
@@ -18,6 +23,7 @@ export class FormatUtils {
         console.log('格式化第三步', finalList)
         let fomatList = this.adapterActivitiNodeList(formart(finalList));
         console.log('格式化第四步', fomatList)
+        console.timeEnd('格式化用时')
         return fomatList;
     }
     /**
@@ -44,7 +50,7 @@ export class FormatUtils {
             }
             else if (node.childNode) {
                 node.nodeTo = [node.childNode.nodeId];
-                node.childNode.nodeFrom = node.nodeId;
+                node.childNode.nodeFrom = [node.nodeId];
                 traverse(node.childNode);
             }
             Reflect.deleteProperty(node, 'childNode')
@@ -172,8 +178,8 @@ export class FormatUtils {
             return p
         }, {})
         let result = []
-        for(let i = 0; i < data.length; i++) {
-            const node = data[i]
+        for(let i = 0; i < nodeList.length; i++) {
+            const node = nodeList[i]
             if(node.nodeTo && node.nodeTo.length === 1) {
                 // 网关节点
                 const to = map[node.nodeTo[0]]
@@ -189,6 +195,39 @@ export class FormatUtils {
                 result.push(node)
             }
         }
+        // 通过对nodeTo来构建每个节点的所有父级
+        let nodeGroup = {};
+        for(let i = 0; i < result.length; i++) {
+            const node = result[i]
+            for(let j = 0; j < node.nodeTo.length; j++) {
+                const id = node.nodeTo[j]
+                if(!nodeGroup[id]) {
+                    nodeGroup[id] = [node.nodeId]
+                } else {
+                    if(!nodeGroup[id].includes(node.nodeId)) {
+                        nodeGroup[id].push(node.nodeId)
+                    }
+                }
+            }
+        }
+        for(let i = 0; i < result.length; i++) {
+            const node = result[i]
+            node.nodeFrom = nodeGroup[node.nodeId] || []
+        }
+        result.shift()
+        const first = this.param.childNode
+        let id = ''
+        if(first.nodeType === 2) {
+            id = first.conditionNodes[0].nodeId
+        } else {
+            id = first.nodeId
+        }
+        const index = result.findIndex((c) => c.nodeId === id)
+        const node = result[index]
+        node.nodeFrom = []
+        result.splice(index, 1)
+        result.unshift(node)
+
         return result;
     }
 
